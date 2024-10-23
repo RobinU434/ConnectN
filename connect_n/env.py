@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import scipy
 
-from connect_n.engine import _Engine
+from connect_n.engine import _Engine, RandomEngine
 
 
 class ConnectN(Env):
@@ -16,7 +16,6 @@ class ConnectN(Env):
         board_width: int = 7,
         max_episode_length: int = 200,
         render_mode: Literal["rgb_array"] | None = None,
-        engine: _Engine | None = None,
     ):
         super().__init__()
 
@@ -36,8 +35,6 @@ class ConnectN(Env):
         self.render_mode = render_mode
         self.observation_space = Box(-1, 1, self._board.shape)
         self.action_space = Discrete(self._board_width)
-        # TODO: implement engine logic inside the env so somebody can play against engine
-        self._engine = engine
 
         self._kernels = self._create_kernels(kernel_size=self._kernel_size)
 
@@ -58,11 +55,11 @@ class ConnectN(Env):
         kernels = np.stack(kernels)
         return kernels
 
-    def reset(self, *, seed=None, options=None):
+    def reset(self, players_turn: int = -1, seed=None, options=None):
         self._step_counter = 0
         self._board = np.zeros((self._board_height, self._board_width), np.int16)
         self._frontier = np.zeros(self._board_width, dtype=np.uint16)
-        self._players_turn = -1
+        self._players_turn = players_turn
 
         return self._board
 
@@ -169,3 +166,50 @@ class ConnectN(Env):
 
     def _truncated(self, current_step) -> bool:
         return current_step >= (self._max_episode_length - 1)
+
+
+class ConnectNOnePlayer(Env):
+    def __init__(
+        self,
+        kernel_size: int = 4,
+        board_height: int = 6,
+        board_width: int = 7,
+        max_episode_length: int = 200,  # how often the player can call step
+        render_mode: Literal["rgb_array"] | None = None,
+        engine: _Engine | None = RandomEngine,
+    ):
+        super().__init__()
+        self._env = ConnectN(
+            kernel_size,
+            board_height,
+            board_width,
+            2 * max_episode_length,  # two times because one player is the engine
+            render_mode,
+        )
+        self._engine = engine(self._env)
+
+    def render(self):
+        return self._env.render()
+
+    def reset(
+        self,
+        first_player: int = 1,  # -1 indication engine, 1 indication foreign player
+        seed=None,
+        options=None,
+    ):
+        state = self._env.reset(players_turn=first_player, seed=seed, options=options)
+
+        if first_player == -1:  # the engine has to play first
+            state, _, _, _, _ = self._env.step(self._engine.get_action(state))
+
+        return state
+
+    def step(self, action: int):
+        # player plays
+        state, reward, terminated, truncated, info = self._env.step(action)
+        if terminated or truncated:
+            return state, reward, terminated, truncated, info
+        # engine plays
+        state, _, terminated, truncated, _ = self._env.step(self._engine.get_action(state))
+        return state, reward, terminated, truncated, info
+
