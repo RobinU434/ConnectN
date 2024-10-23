@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "connectn"
+version = "0.1.0"
+description = "RL environment for playing connect 4 up to two player"
+authors = ["Robin Uhrich <robin.uhrich@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+gymnasium = "^1.0.0"
+numpy = "^2.1.2"
+matplotlib = "^3.9.2"
+scipy = "^1.14.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
